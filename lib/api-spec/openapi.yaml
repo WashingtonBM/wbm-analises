@@ -1,0 +1,143 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: analysis
+    description: Document and data analysis operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /analysis:
+    post:
+      operationId: analyzeContent
+      tags: [analysis]
+      summary: Analyze uploaded document or data
+      description: Uses the configured language model to analyze user-provided text, PDFs, spreadsheets, or images and answer a question about it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalysisInput"
+      responses:
+        "200":
+          description: Analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisResult"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Analysis service error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    AnalysisInput:
+      type: object
+      properties:
+        fileName:
+          type: string
+          minLength: 1
+        sourceType:
+          type: string
+          enum: [text, pdf, spreadsheet, image, mixed]
+        content:
+          type: string
+          maxLength: 120000
+        imageData:
+          type: array
+          maxItems: 8
+          items:
+            type: string
+            maxLength: 16000000
+        question:
+          type: string
+          minLength: 1
+          maxLength: 4000
+      required:
+        - fileName
+        - sourceType
+        - question
+    AnalysisResult:
+      type: object
+      properties:
+        answer:
+          type: string
+        summary:
+          type: string
+        keyFindings:
+          type: array
+          items:
+            type: string
+        anomalies:
+          type: array
+          items:
+            type: string
+        recommendations:
+          type: array
+          items:
+            type: string
+        suggestedQuestions:
+          type: array
+          items:
+            type: string
+        source:
+          type: object
+          properties:
+            fileName:
+              type: string
+            charactersAnalyzed:
+              type: number
+          required:
+            - fileName
+            - charactersAnalyzed
+      required:
+        - answer
+        - summary
+        - keyFindings
+        - anomalies
+        - recommendations
+        - suggestedQuestions
+        - source
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+

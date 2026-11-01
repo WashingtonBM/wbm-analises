@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
+import AnalysisHistory from '../components/analysis-history';
+import { saveAnalysis, type AnalysisResult, type SavedAnalysis } from '../lib/analysis-history';
 
 GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
@@ -41,15 +43,6 @@ type LoadedSource = {
   content: string;
   imageData?: string;
   previewUrl?: string;
-};
-type AnalysisResult = {
-  answer: string;
-  summary: string;
-  keyFindings: string[];
-  anomalies: string[];
-  recommendations: string[];
-  suggestedQuestions: string[];
-  source: { fileName: string; charactersAnalyzed: number };
 };
 
 function formatCharacters(count: number) {
@@ -111,6 +104,10 @@ export default function Home() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [fileError, setFileError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [historyVersion, setHistoryVersion] = useState(0);
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState('');
+  const resultRef = useRef<HTMLElement>(null);
   const analysis = useAnalyzeContent();
 
   const sourcesRef = useRef(sources);
@@ -245,7 +242,22 @@ export default function Home() {
     };
     analysis.mutate(
       { data },
-      { onSuccess: (data) => setResult(data as AnalysisResult) },
+      {
+        onSuccess: (response) => {
+          const analysisResult = response as AnalysisResult;
+          setResult(analysisResult);
+          setSelectedHistoryId(null);
+          setSaveError('');
+          saveAnalysis({
+            fileName: data.fileName,
+            sourceType,
+            question: question.trim(),
+            result: analysisResult,
+          })
+            .then(() => setHistoryVersion((version) => version + 1))
+            .catch(() => setSaveError('A análise foi gerada, mas não foi possível salvá-la no histórico.'));
+        },
+      },
     );
   };
 
@@ -254,6 +266,14 @@ export default function Home() {
     await navigator.clipboard?.writeText(`${result.answer}\n\nResumo executivo\n${result.summary}\n\nPrincipais achados\n${result.keyFindings.map((finding) => `• ${finding}`).join('\n')}\n\nAnomalias\n${result.anomalies.map((finding) => `• ${finding}`).join('\n')}\n\nRecomendações\n${result.recommendations.map((finding) => `• ${finding}`).join('\n')}`);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
+  };
+
+  const openHistoryEntry = (entry: SavedAnalysis) => {
+    setResult(entry.result);
+    setSelectedHistoryId(entry.id);
+    setQuestion(entry.question);
+    setSaveError('');
+    resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const hasSource = sources.length > 0 || Boolean(content.trim());
@@ -422,7 +442,7 @@ export default function Home() {
             )}
 
             {result && !isWorking && (
-              <section className="animate-rise mt-10" data-testid="section-analysis-result">
+              <section ref={resultRef} className="animate-rise mt-10 scroll-mt-8" data-testid="section-analysis-result">
                 <div className="mb-5 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
                   <div>
                     <div className="mb-2 flex items-center gap-2 text-primary"><CheckCircle2 size={16} /><span className="font-mono-ui text-[10px] font-medium uppercase tracking-[0.16em]">Análise concluída</span></div>
@@ -433,7 +453,8 @@ export default function Home() {
                     {copied ? <Check size={14} /> : <Clipboard size={14} />}{copied ? 'Copiado' : 'Copiar relatório'}
                   </button>
                 </div>
-                <div className="grid gap-5 lg:grid-cols-[1.15fr_.85fr]">
+                {saveError && <p className="mb-5 text-xs leading-5 text-destructive" role="alert" data-testid="alert-history-save-error">{saveError}</p>}
+              <div className="grid gap-5 lg:grid-cols-[1.15fr_.85fr]">
                   <article className="rounded-2xl border border-border bg-card p-6 paper-shadow sm:p-8" data-testid="card-answer">
                     <p className="mb-4 font-mono-ui text-[10px] uppercase tracking-[0.16em] text-primary">Resposta executiva</p>
                     <p className="whitespace-pre-wrap text-[15px] leading-7 text-foreground" data-testid="text-analysis-answer">{result.answer}</p>
@@ -475,6 +496,7 @@ export default function Home() {
             {!result && !isWorking && !analysis.isError && (
               <div className="animate-appear mt-8 flex items-center gap-3 text-xs text-muted-foreground" data-testid="state-empty-analysis"><div className="flex size-7 items-center justify-center rounded-full border border-border bg-card"><Sparkles size={13} className="text-primary" /></div><span>O relatório executivo aparecerá aqui depois da sua pergunta.</span></div>
             )}
+            <AnalysisHistory refreshKey={historyVersion} selectedId={selectedHistoryId} onSelect={openHistoryEntry} />
           </div>
         </main>
       </div>

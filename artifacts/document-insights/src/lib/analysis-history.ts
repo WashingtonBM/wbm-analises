@@ -1,3 +1,5 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 export type AnalysisResult = {
   answer: string;
   summary: string;
@@ -34,17 +36,7 @@ type AnalysisRow = {
 };
 
 const HISTORY_LIMIT = 20;
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-function requestHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  return {
-    apikey: anonKey,
-    Authorization: `Bearer ${anonKey}`,
-    'Content-Type': 'application/json',
-    ...extra,
-  };
-}
+const HISTORY_COLUMNS = 'id,created_at,file_name,source_type,question,result';
 
 function isAnalysisRow(value: unknown): value is AnalysisRow {
   if (typeof value !== 'object' || value === null) return false;
@@ -58,28 +50,25 @@ function isAnalysisRow(value: unknown): value is AnalysisRow {
     && row.result !== null;
 }
 
-export async function saveAnalysis(entry: NewAnalysis): Promise<void> {
-  const response = await fetch(`${supabaseUrl}/rest/v1/analyses`, {
-    method: 'POST',
-    headers: requestHeaders({ Prefer: 'return=minimal' }),
-    body: JSON.stringify({
-      file_name: entry.fileName,
-      source_type: entry.sourceType,
-      question: entry.question,
-      characters_analyzed: entry.result.source.charactersAnalyzed,
-      result: entry.result,
-    }),
+export async function saveAnalysis(client: SupabaseClient, entry: NewAnalysis): Promise<void> {
+  const { error } = await client.from('analyses').insert({
+    file_name: entry.fileName,
+    source_type: entry.sourceType,
+    question: entry.question,
+    characters_analyzed: entry.result.source.charactersAnalyzed,
+    result: entry.result,
   });
-  if (!response.ok) throw new Error(`Save failed (${response.status})`);
+  if (error) throw error;
 }
 
-export async function listAnalyses(): Promise<SavedAnalysis[]> {
-  const query = `select=id,created_at,file_name,source_type,question,result&order=created_at.desc&limit=${HISTORY_LIMIT}`;
-  const response = await fetch(`${supabaseUrl}/rest/v1/analyses?${query}`, {
-    headers: requestHeaders(),
-  });
-  if (!response.ok) throw new Error(`History load failed (${response.status})`);
-  const rows: unknown = await response.json();
+export async function listAnalyses(client: SupabaseClient): Promise<SavedAnalysis[]> {
+  const { data, error } = await client
+    .from('analyses')
+    .select(HISTORY_COLUMNS)
+    .order('created_at', { ascending: false })
+    .limit(HISTORY_LIMIT);
+  if (error) throw error;
+  const rows: unknown = data;
   if (!Array.isArray(rows) || !rows.every(isAnalysisRow)) {
     throw new Error('Unexpected history response');
   }

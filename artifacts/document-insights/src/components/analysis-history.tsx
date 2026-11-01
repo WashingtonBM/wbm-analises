@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight, Clock3, LoaderCircle } from 'lucide-react';
 import { listAnalyses, type SavedAnalysis } from '../lib/analysis-history';
+import { supabase } from '../lib/supabase';
 
 type Props = {
   refreshKey: number;
@@ -19,7 +20,7 @@ export default function AnalysisHistory({ refreshKey, selectedId, onSelect }: Pr
   useEffect(() => {
     let cancelled = false;
     setStatus('loading');
-    listAnalyses()
+    listAnalyses(supabase)
       .then((items) => {
         if (cancelled) return;
         setEntries(items);

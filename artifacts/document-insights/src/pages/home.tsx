@@ -1,5 +1,6 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
-import { useAnalyzeContent } from '@workspace/api-client-react';
+import { useMutation } from '@tanstack/react-query';
+import { analyzeContent, type AnalysisInput } from '@workspace/api-client-react';
 import {
   AlertCircle,
   ArrowUpRight,
@@ -23,6 +24,8 @@ import {
 } from 'lucide-react';
 import AnalysisHistory from '../components/analysis-history';
 import { saveAnalysis, type AnalysisResult, type SavedAnalysis } from '../lib/analysis-history';
+import { useAuth } from '../lib/auth-context';
+import { supabase } from '../lib/supabase';
 
 const ACCEPTED_TYPES = '.txt,.md,.csv,.json,.tsv,.pdf,.xls,.xlsx,.png,.jpg,.jpeg,.webp';
 const MAX_CONTENT_LENGTH = 120000;
@@ -107,7 +110,13 @@ export default function Home() {
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState('');
   const resultRef = useRef<HTMLElement>(null);
-  const analysis = useAnalyzeContent();
+  const { signOut, getAccessToken } = useAuth();
+  const analysis = useMutation({
+    mutationFn: ({ data, accessToken }: { data: AnalysisInput; accessToken: string | null }) => {
+      if (!accessToken) throw new Error('Sua sessão expirou. Entre novamente para continuar.');
+      return analyzeContent(data, { headers: { Authorization: `Bearer ${accessToken}` } });
+    },
+  });
 
   const sourcesRef = useRef(sources);
   useEffect(() => {
@@ -229,7 +238,7 @@ export default function Home() {
   const imageData = sources.flatMap((source) => source.imageData ? [source.imageData] : []);
   const totalFileSize = sources.reduce((total, source) => total + source.size, 0);
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!hasSource || !question.trim()) return;
     const data = {
@@ -239,15 +248,16 @@ export default function Home() {
       ...(imageData.length ? { imageData } : {}),
       question: question.trim(),
     };
+    const accessToken = await getAccessToken();
     analysis.mutate(
-      { data },
+      { data, accessToken },
       {
         onSuccess: (response) => {
           const analysisResult = response as AnalysisResult;
           setResult(analysisResult);
           setSelectedHistoryId(null);
           setSaveError('');
-          saveAnalysis({
+          saveAnalysis(supabase, {
             fileName: data.fileName,
             sourceType,
             question: question.trim(),
@@ -278,7 +288,10 @@ export default function Home() {
   const hasSource = sources.length > 0 || Boolean(content.trim());
   const isWorking = analysis.isPending || isReadingFiles;
   const apiError = analysis.error as { response?: { data?: { error?: string } }; message?: string } | null;
-  const errorMessage = apiError?.response?.data?.error || apiError?.message || 'The analysis desk could not complete that request. Please try again.';
+  const errorStatus = (analysis.error as { status?: number } | null)?.status;
+  const errorMessage = errorStatus === 401 || errorStatus === 403
+    ? 'Não foi possível autorizar sua conta para esta análise. Entre novamente ou confirme seu acesso.'
+    : apiError?.response?.data?.error || apiError?.message || 'The analysis desk could not complete that request. Please try again.';
 
   return (
     <div className="noise min-h-[100dvh] bg-background">
@@ -322,10 +335,15 @@ export default function Home() {
               <p className="font-mono-ui text-[10px] uppercase tracking-[0.18em] text-muted-foreground">WBM Análises / 01</p>
               <h1 className="mt-1 text-base font-bold tracking-[-0.02em]">Nova análise financeira</h1>
             </div>
-            <button onClick={reset} type="button" className="focus-ring group flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-xs font-bold text-foreground transition hover:border-primary hover:text-primary" data-testid="button-new-analysis">
-              <Plus size={15} className="transition-transform group-hover:rotate-90" />
-              Começar de novo
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={reset} type="button" className="focus-ring group flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-2 text-xs font-bold text-foreground transition hover:border-primary hover:text-primary" data-testid="button-new-analysis">
+                <Plus size={15} className="transition-transform group-hover:rotate-90" />
+                Começar de novo
+              </button>
+              <button type="button" onClick={() => void signOut()} className="focus-ring rounded-full border border-border bg-card px-3.5 py-2 text-xs font-bold text-foreground transition hover:border-primary hover:text-primary" data-testid="button-sign-out">
+                Sair
+              </button>
+            </div>
           </header>
 
           <div className="mx-auto max-w-[1180px] px-5 py-8 sm:px-8 sm:py-12 lg:px-12 lg:py-16">

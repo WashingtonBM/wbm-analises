@@ -21,12 +21,8 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
-import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
 import AnalysisHistory from '../components/analysis-history';
 import { saveAnalysis, type AnalysisResult, type SavedAnalysis } from '../lib/analysis-history';
-
-GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
 const ACCEPTED_TYPES = '.txt,.md,.csv,.json,.tsv,.pdf,.xls,.xlsx,.png,.jpg,.jpeg,.webp';
 const MAX_CONTENT_LENGTH = 120000;
@@ -72,6 +68,8 @@ function readAsDataUrl(file: File) {
 }
 
 async function extractPdfText(file: File) {
+  const { getDocument, GlobalWorkerOptions } = await import('pdfjs-dist');
+  GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
   const document = await getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
   const pages: string[] = [];
   for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
@@ -87,6 +85,7 @@ async function extractPdfText(file: File) {
 }
 
 async function extractSpreadsheetText(file: File) {
+  const XLSX = await import('xlsx');
   const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
   const sheets = workbook.SheetNames.map((sheetName) => {
     const sheet = workbook.Sheets[sheetName];

@@ -119,9 +119,9 @@ describe("API access", () => {
     assert.equal(callsTo(GEMINI_PREFIX).length, 0);
   });
 
-  it("denies unknown API paths by default", async () => {
+  it("leaves unlisted API paths public and returns 404", async () => {
     const response = await realFetch(`${baseUrl}/api/unlisted-route`);
-    assert.equal(response.status, 401);
+    assert.equal(response.status, 404);
   });
 
   it("runs the analysis for a valid session", async () => {

@@ -3,6 +3,7 @@ import {
   AnalyzeContentBody,
   AnalyzeContentResponse,
 } from "@workspace/api-zod";
+import { requireSession } from "../middlewares/require-session";
 
 const router: IRouter = Router();
 
@@ -42,7 +43,7 @@ function cleanApiKey(key: string | undefined): string {
   return key?.trim().replace(/^["']|["']$/g, "").replace(/^Bearer\s+/i, "") ?? "";
 }
 
-router.post("/analysis", async (req, res): Promise<void> => {
+router.post("/analysis", requireSession, async (req, res): Promise<void> => {
   const parsed = AnalyzeContentBody.safeParse(req.body);
   if (!parsed.success) {
     req.log.warn({ errors: parsed.error.message }, "Invalid analysis request");

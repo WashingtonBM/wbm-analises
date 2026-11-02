@@ -1,4 +1,4 @@
-# WBM Análises
+# WBM-Análises
 
 Aplicação de análise financeira que transforma relatórios e dados enviados pelo usuário em uma leitura executiva, com principais achados, anomalias, recomendações e perguntas para investigação.
 
